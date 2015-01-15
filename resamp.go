@@ -31,6 +31,7 @@ type Resampler struct {
 	sratio float64
 	data []*C.uint8_t
 	nf C.int // samples allocated (per plane)
+	buf []C.uint8_t
 }
 
 func DefaultLayout(nChannels int) ChannelLayout {
@@ -74,18 +75,13 @@ func Resample(source SampleStream, to AudioFormat) (SampleStream, error) {
 	if r < 0 {
 		return nil, avError(r)
 	}
+	resamp.data = make([]*C.uint8_t, from.NumPlanes())
 	return &resamp, nil
 }
 
 func (resamp *Resampler) Close() {
 	if resamp.ctx != nil {
 		C.swr_free(&resamp.ctx) /* sets ctx to nil */
-	}
-	for i, ptr := range resamp.data {
-		if ptr != nil {
-			C.free(unsafe.Pointer(ptr))
-			resamp.data[i] = nil
-		}
 	}
 	resamp.source.Close()
 }
@@ -96,20 +92,17 @@ func (resamp *Resampler) Format() AudioFormat {
 
 func (resamp *Resampler) checkBuf(nf C.int) error {
 	if resamp.nf < nf {
-		nbytes := nf * C.av_get_bytes_per_sample(int32(resamp.fmt.Storage)) * C.int(resamp.source.Format().NumPlanes())
-		if resamp.nf == 0 {
-			resamp.data = make([]*C.uint8_t, resamp.fmt.NumPlanes())
-		} else {
-			for i, ptr := range resamp.data {
-				C.free(unsafe.Pointer(ptr))
-				resamp.data[i] = nil
-			}
-		}
+		bpc := nf * C.av_get_bytes_per_sample(int32(resamp.fmt.Storage))
+		nbytes := bpc * C.int(resamp.fmt.NumChannels())
+		resamp.buf = make([]C.uint8_t, nbytes)
+		h := (*reflect.SliceHeader)(unsafe.Pointer(&resamp.buf))
+		buf := (uintptr)(unsafe.Pointer(h.Data))
+
+		/* In the planar case, this loop sets up pointers for each plane in contiguous
+		** fashion within the allocated block. In the packed case, it sets up a single
+		** pointer to the start of the block. */
 		for i, _ := range resamp.data {
-			resamp.data[i] = (*C.uint8_t)(unsafe.Pointer((C.malloc(C.size_t(nbytes)))))
-			if resamp.data[i] == nil {
-				return errors.New("couldn't allocate resample output buffer")
-			}
+			resamp.data[i] = (*C.uint8_t)(unsafe.Pointer(buf + uintptr(i * int(bpc))))
 		}
 		resamp.nf = nf
 	}
