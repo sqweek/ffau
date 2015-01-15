@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"math"
 	"reflect"
 	"unsafe"
 )
@@ -27,8 +28,9 @@ type Resampler struct {
 	ctx *C.SwrContext
 	source SampleStream
 	sourceEOF bool
+	sratio float64
 	data []*C.uint8_t
-	nbytes C.int // bytes allocated (per plane)
+	nf C.int // samples allocated (per plane)
 }
 
 func DefaultLayout(nChannels int) ChannelLayout {
@@ -67,6 +69,7 @@ func Resample(source SampleStream, to AudioFormat) (SampleStream, error) {
 	if resamp.ctx == nil {
 		return nil, errors.New("couldn't allocate resampling context")
 	}
+	resamp.sratio = float64(to.Rate) / float64(from.Rate)
 	r := C.swr_init(resamp.ctx)
 	if r < 0 {
 		return nil, avError(r)
@@ -75,14 +78,15 @@ func Resample(source SampleStream, to AudioFormat) (SampleStream, error) {
 }
 
 func (resamp *Resampler) Close() {
-	C.swr_close(resamp.ctx)
+	if resamp.ctx != nil {
+		C.swr_free(&resamp.ctx) /* sets ctx to nil */
+	}
 	for i, ptr := range resamp.data {
 		if ptr != nil {
 			C.free(unsafe.Pointer(ptr))
 			resamp.data[i] = nil
 		}
 	}
-	C.swr_free(&resamp.ctx)
 	resamp.source.Close()
 }
 
@@ -90,10 +94,10 @@ func (resamp *Resampler) Format() AudioFormat {
 	return resamp.fmt
 }
 
-func (resamp *Resampler) checkBuf(ns C.int) error {
-	nbytes := ns * C.av_get_bytes_per_sample(int32(resamp.fmt.Storage)) * C.int(resamp.source.Format().NumPlanes())
-	if resamp.nbytes < nbytes {
-		if resamp.nbytes == 0 {
+func (resamp *Resampler) checkBuf(nf C.int) error {
+	if resamp.nf < nf {
+		nbytes := nf * C.av_get_bytes_per_sample(int32(resamp.fmt.Storage)) * C.int(resamp.source.Format().NumPlanes())
+		if resamp.nf == 0 {
 			resamp.data = make([]*C.uint8_t, resamp.fmt.NumPlanes())
 		} else {
 			for i, ptr := range resamp.data {
@@ -107,7 +111,7 @@ func (resamp *Resampler) checkBuf(ns C.int) error {
 				return errors.New("couldn't allocate resample output buffer")
 			}
 		}
-		resamp.nbytes = nbytes
+		resamp.nf = nf
 	}
 	return nil
 }
@@ -123,14 +127,14 @@ func (resamp *Resampler) read_raw() (**C.uint8_t, C.int, error) {
 		} else if err != nil {
 			return nil, 0, err
 		}
-		err = resamp.checkBuf(nf)
+		err = resamp.checkBuf(C.int(math.Ceil(float64(nf) * resamp.sratio)))
 		if err != nil {
 			return nil, 0, err
 		}
 	}
 	h := (*reflect.SliceHeader)(unsafe.Pointer(&resamp.data))
 	out := (**C.uint8_t)(unsafe.Pointer(h.Data))
-	nfout := C.swr_convert(resamp.ctx, out, resamp.nbytes, in, nf)
+	nfout := C.swr_convert(resamp.ctx, out, resamp.nf, in, nf)
 	if nfout == 0 {
 		return nil, 0, io.EOF
 	}
