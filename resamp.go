@@ -48,7 +48,7 @@ func (format AudioFormat) NumPlanes() int {
 	case PackedU8s, PackedS16s, PackedS32s, PackedFloats, PackedDoubles:
 		return 1
 	case PlanarU8s, PlanarS16s, PlanarS32s, PlanarFloats, PlanarDoubles:
-		return int(C.av_get_channel_layout_nb_channels(C.uint64_t(format.Layout)))
+		return format.NumChannels()
 	default:
 		return 0
 	}

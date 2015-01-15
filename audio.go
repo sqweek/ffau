@@ -65,15 +65,6 @@ func OpenFile(filename string) (*FormatContext, error) {
 	if r < 0 {
 		return nil, avError(r)
 	}
-	fmt.Println("FormatContext", *ctx.ctx)
-	fmt.Println("nstreams:", ctx.ctx.nb_streams)
-	for i := 0; i < int(ctx.ctx.nb_streams); i++ {
-		fmt.Println("stream", i)
-		s := ctx.stream(i)
-		fmt.Println("    ", *s)
-		fmt.Println("    ", s.codec.codec_type)
-		fmt.Println("    ", C.AVMEDIA_TYPE_AUDIO)
-	}
 	return &ctx, nil
 }
 
@@ -103,7 +94,6 @@ func (format *FormatContext) OpenAudioStream() (*AudioStream, error) {
 		return nil, err
 	}
 	idx := C.av_find_best_stream(format.ctx, C.AVMEDIA_TYPE_AUDIO, -1, -1, nil, 0)
-	fmt.Println("av_find_best_stream:", idx)
 	if idx < 0 {
 		return nil, avError(idx)
 	}
@@ -115,7 +105,6 @@ func (format *FormatContext) OpenAudioStream() (*AudioStream, error) {
 	}
 	dict := (*C.AVDictionary)(nil)
 	r := C.avcodec_open2(dec_ctx, decoder, &dict)
-	fmt.Println("avcodec_open2:", r)
 	if r < 0 {
 		return nil, avError(r)
 	}
