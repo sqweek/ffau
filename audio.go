@@ -18,13 +18,18 @@ func init() {
 	C.av_register_all()
 }
 
+/* FormatContext represents a decoding context of eg. an open file. */
 type FormatContext struct {
 	ctx *C.AVFormatContext
 }
 
 type SampleStream interface {
+	/* The format in which this stream's samples are stored. */
 	Format() AudioFormat
+
+	/* Releases any resources associated with the stream. */
 	Close()
+
 	/* returns raw audio data (1 pointer per plane) and number of samples (per plane), or an error */
 	read_raw() (**C.uint8_t, C.int, error)
 }
@@ -56,6 +61,8 @@ func avError(errnum C.int) error {
 	return errors.New(C.GoString(cp))
 }
 
+/* Opens an audio file and returns a FormatContext which can be used to decode
+the file. */
 func OpenFile(filename string) (*FormatContext, error) {
 	var ctx FormatContext
 	cfile := C.CString(filename)
@@ -67,6 +74,7 @@ func OpenFile(filename string) (*FormatContext, error) {
 	return &ctx, nil
 }
 
+/* Closes a FormatContext, releasing associated resources. */
 func (format *FormatContext) Close() {
 	C.avformat_close_input(&format.ctx)
 }
@@ -79,7 +87,7 @@ func (format *FormatContext) stream(index int) *C.AVStream {
 	return stream
 }
 
-func (format *FormatContext) FindStreamInfo() error {
+func (format *FormatContext) findStreamInfo() error {
 	r := C.avformat_find_stream_info(format.ctx, nil)
 	if r < 0 {
 		return avError(r)
@@ -87,8 +95,9 @@ func (format *FormatContext) FindStreamInfo() error {
 	return nil
 }
 
+/* Returns the "best" AudioStream found in the file. */
 func (format *FormatContext) OpenAudioStream() (*AudioStream, error) {
-	err := format.FindStreamInfo()
+	err := format.findStreamInfo()
 	if err != nil {
 		return nil, err
 	}

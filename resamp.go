@@ -16,13 +16,15 @@ import (
 import "C"
 
 type AudioFormat struct {
-	Rate    int
-	Storage SampleFmt
-	Layout  ChannelLayout
+	Rate    int           // Number of frames per second
+	Storage SampleFmt     // Sample encoding / memory layout
+	Layout  ChannelLayout // Channel configuration
 }
 
 type ChannelLayout C.int64_t // TODO proper enum?
 
+/* Converts a SampleStream to a target AudioFormat. Resampler
+itself implements the SampleStream interface. */
 type Resampler struct {
 	fmt       AudioFormat
 	ctx       *C.SwrContext
@@ -34,18 +36,23 @@ type Resampler struct {
 	buf       []C.uint8_t
 }
 
+/* Returns the "default" channel layout for the given number of channels. */
 func DefaultLayout(nChannels int) ChannelLayout {
 	return ChannelLayout(C.av_get_default_channel_layout(C.int(nChannels)))
 }
 
+/* Compares an AudioFormat to another. */
 func (this AudioFormat) Equal(that AudioFormat) bool {
 	return this.Rate == that.Rate && this.Storage == that.Storage && this.Layout == that.Layout
 }
 
+/* The number of channels the AudioFormat describes. */
 func (format AudioFormat) NumChannels() int {
 	return int(C.av_get_channel_layout_nb_channels(C.uint64_t(format.Layout)))
 }
 
+/* The number of storage planes the AudioFormat suggests. For packed audio
+this is always 1, and for planar audio equivalent to NumChannels. */
 func (format AudioFormat) NumPlanes() int {
 	switch format.Storage {
 	case PackedU8s, PackedS16s, PackedS32s, PackedFloats, PackedDoubles:
@@ -57,6 +64,9 @@ func (format AudioFormat) NumPlanes() int {
 	}
 }
 
+/* Creates a Resampler that converts the source SampleStream to the requested
+AudioFormat. If the source is already in the requested format, then it is
+returned as is (ie. no Resampler is allocated). */
 func Resample(source SampleStream, to AudioFormat) (SampleStream, error) {
 	resamp := Resampler{fmt: to, source: source}
 	from := source.Format()
@@ -79,6 +89,7 @@ func Resample(source SampleStream, to AudioFormat) (SampleStream, error) {
 	return &resamp, nil
 }
 
+/* Frees memory associated with a Resampler, and closes the source stream. */
 func (resamp *Resampler) Close() {
 	if resamp.ctx != nil {
 		C.swr_free(&resamp.ctx) /* sets ctx to nil */
