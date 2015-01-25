@@ -16,22 +16,22 @@ import (
 import "C"
 
 type AudioFormat struct {
-	Rate int
+	Rate    int
 	Storage SampleFmt
-	Layout ChannelLayout
+	Layout  ChannelLayout
 }
 
 type ChannelLayout C.int64_t // TODO proper enum?
 
 type Resampler struct {
-	fmt AudioFormat
-	ctx *C.SwrContext
-	source SampleStream
+	fmt       AudioFormat
+	ctx       *C.SwrContext
+	source    SampleStream
 	sourceEOF bool
-	sratio float64
-	data []*C.uint8_t
-	nf C.int // samples allocated (per plane)
-	buf []C.uint8_t
+	sratio    float64
+	data      []*C.uint8_t
+	nf        C.int // samples allocated (per plane)
+	buf       []C.uint8_t
 }
 
 func DefaultLayout(nChannels int) ChannelLayout {
@@ -64,9 +64,9 @@ func Resample(source SampleStream, to AudioFormat) (SampleStream, error) {
 		return source, nil /* no-op */
 	}
 	resamp.ctx = C.swr_alloc_set_opts(nil,
-	    C.int64_t(to.Layout), int32(to.Storage), C.int(to.Rate),
-	    C.int64_t(from.Layout), int32(from.Storage), C.int(from.Rate),
-	    0, nil)
+		C.int64_t(to.Layout), int32(to.Storage), C.int(to.Rate),
+		C.int64_t(from.Layout), int32(from.Storage), C.int(from.Rate),
+		0, nil)
 	if resamp.ctx == nil {
 		return nil, errors.New("couldn't allocate resampling context")
 	}
@@ -102,7 +102,7 @@ func (resamp *Resampler) checkBuf(nf C.int) error {
 		** fashion within the allocated block. In the packed case, it sets up a single
 		** pointer to the start of the block. */
 		for i, _ := range resamp.data {
-			resamp.data[i] = (*C.uint8_t)(unsafe.Pointer(buf + uintptr(i * int(bpc))))
+			resamp.data[i] = (*C.uint8_t)(unsafe.Pointer(buf + uintptr(i*int(bpc))))
 		}
 		resamp.nf = nf
 	}
@@ -136,22 +136,21 @@ func (resamp *Resampler) read_raw() (**C.uint8_t, C.int, error) {
 
 func dumpPlanarStereo(data **C.uint8_t, nf C.int) {
 	ext := (*[8]*C.uint8_t)(unsafe.Pointer(data))
-	l := C.GoBytes(unsafe.Pointer(ext[0]), nf * 2)
-	r := C.GoBytes(unsafe.Pointer(ext[1]), nf * 2)
+	l := C.GoBytes(unsafe.Pointer(ext[0]), nf*2)
+	r := C.GoBytes(unsafe.Pointer(ext[1]), nf*2)
 	for i := 0; i < int(nf); i++ {
-		sl := uint16(l[i * 2]) + (uint16(l[i * 2 + 1]) << 8)
-		sr := uint16(r[i * 2]) + (uint16(r[i * 2 + 1]) << 8)
+		sl := uint16(l[i*2]) + (uint16(l[i*2+1]) << 8)
+		sr := uint16(r[i*2]) + (uint16(r[i*2+1]) << 8)
 		fmt.Printf("%4d %+05x %+05x\n", i, sl, sr)
 	}
 }
 
 func dumpPackedStereo(data **C.uint8_t, nf C.int) {
 	ext := (*[8]*C.uint8_t)(unsafe.Pointer(data))
-	s := C.GoBytes(unsafe.Pointer(ext[0]), nf * 2 * 2)
+	s := C.GoBytes(unsafe.Pointer(ext[0]), nf*2*2)
 	for i := 0; i < int(nf); i++ {
-		sl := uint16(s[i * 4]) + (uint16(s[i*4 + 1]) << 8)
-		sr := uint16(s[i * 4 + 2]) + (uint16(s[i*4 + 3]) << 8)
+		sl := uint16(s[i*4]) + (uint16(s[i*4+1]) << 8)
+		sr := uint16(s[i*4+2]) + (uint16(s[i*4+3]) << 8)
 		fmt.Printf("%4d %+05x %+05x\n", i, sl, sr)
 	}
 }
-

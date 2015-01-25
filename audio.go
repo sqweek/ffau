@@ -14,7 +14,6 @@ import (
 */
 import "C"
 
-
 func init() {
 	C.av_register_all()
 }
@@ -31,18 +30,18 @@ type SampleStream interface {
 }
 
 type AudioStream struct {
-	ctx *FormatContext
-	idx C.int
+	ctx    *FormatContext
+	idx    C.int
 	stream *C.AVStream
-	fmt AudioFormat
+	fmt    AudioFormat
 
 	// the original data/size when a packet is first read
 	orig struct {
 		data *C.uint8_t
 		size C.int
 	}
-	pkt C.AVPacket
-	frame *C.AVFrame
+	pkt       C.AVPacket
+	frame     *C.AVFrame
 	framesEOF bool
 }
 

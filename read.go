@@ -30,7 +30,6 @@ func (stream PackedS16Stream) Read() ([]int16, error) {
 	return *(*[]int16)(unsafe.Pointer(&s)), nil
 }
 
-
 /* potential target API:
 
 AsPackedS16s(filename string, desiredSampleRate int, desiredLayout ChannelLayout) PackedS16Stream
