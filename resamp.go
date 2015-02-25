@@ -130,6 +130,8 @@ func (resamp *Resampler) read_raw() (**C.uint8_t, C.int, error) {
 			resamp.sourceEOF = true
 		} else if err != nil {
 			return nil, 0, err
+		} else if nf == 0 {
+			return nil, 0, nil
 		}
 		err = resamp.checkBuf(C.int(math.Ceil(float64(nf) * resamp.sratio)))
 		if err != nil {
