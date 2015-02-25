@@ -50,7 +50,7 @@ type AudioStream struct {
 	framesEOF bool
 }
 
-func avError(errnum C.int) error {
+func avError(errnum C.int, fn string) error {
 	switch errnum {
 	case C.AVERROR_EOF:
 		return io.EOF
@@ -58,7 +58,7 @@ func avError(errnum C.int) error {
 	var buf [256]C.char
 	cp := (*C.char)(unsafe.Pointer(&buf[0]))
 	C.av_strerror(errnum, cp, C.size_t(len(buf)))
-	return errors.New(C.GoString(cp))
+	return errors.New(fmt.Sprintf("%s: %s", fn, C.GoString(cp)))
 }
 
 /* Opens an audio file and returns a FormatContext which can be used to decode
@@ -69,7 +69,7 @@ func OpenFile(filename string) (*FormatContext, error) {
 	defer C.free(unsafe.Pointer(cfile))
 	r := C.avformat_open_input(&ctx.ctx, cfile, nil, nil)
 	if r < 0 {
-		return nil, avError(r)
+		return nil, avError(r, "avformat_open_input")
 	}
 	return &ctx, nil
 }
@@ -90,7 +90,7 @@ func (format *FormatContext) stream(index int) *C.AVStream {
 func (format *FormatContext) findStreamInfo() error {
 	r := C.avformat_find_stream_info(format.ctx, nil)
 	if r < 0 {
-		return avError(r)
+		return avError(r, "avformat_find_stream_info")
 	}
 	return nil
 }
@@ -103,7 +103,7 @@ func (format *FormatContext) OpenAudioStream() (*AudioStream, error) {
 	}
 	idx := C.av_find_best_stream(format.ctx, C.AVMEDIA_TYPE_AUDIO, -1, -1, nil, 0)
 	if idx < 0 {
-		return nil, avError(idx)
+		return nil, avError(idx, "av_find_best_stream")
 	}
 	stream := format.stream(int(idx))
 	dec_ctx := stream.codec
@@ -114,7 +114,7 @@ func (format *FormatContext) OpenAudioStream() (*AudioStream, error) {
 	dict := (*C.AVDictionary)(nil)
 	r := C.avcodec_open2(dec_ctx, decoder, &dict)
 	if r < 0 {
-		return nil, avError(r)
+		return nil, avError(r, "avcodec_open2")
 	}
 	audio := &AudioStream{ctx: format, idx: idx, stream: stream}
 	audio.frame = C.av_frame_alloc()
@@ -149,14 +149,14 @@ func (audio *AudioStream) read_frame() error {
 	if r == 0 {
 		return nil
 	}
-	return avError(r)
+	return avError(r, "av_read_frame")
 }
 
 func (audio *AudioStream) decode() (bool, error) {
 	gotFrame := C.int(0)
 	n := C.avcodec_decode_audio4(audio.stream.codec, audio.frame, &gotFrame, &audio.pkt)
 	if n < 0 {
-		return false, avError(n)
+		return false, avError(n, "avcodec_decode_audio4")
 	}
 	if n > audio.pkt.size {
 		n = audio.pkt.size

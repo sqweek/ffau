@@ -83,7 +83,7 @@ func Resample(source SampleStream, to AudioFormat) (SampleStream, error) {
 	resamp.sratio = float64(to.Rate) / float64(from.Rate)
 	r := C.swr_init(resamp.ctx)
 	if r < 0 {
-		return nil, avError(r)
+		return nil, avError(r, "swr_init")
 	}
 	resamp.data = make([]*C.uint8_t, from.NumPlanes())
 	return &resamp, nil
