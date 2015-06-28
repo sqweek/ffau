@@ -147,13 +147,13 @@ func (audio *AudioStream) read_frame() error {
 	}
 	for {
 		r := C.av_read_frame(audio.ctx.ctx, &audio.pkt)
-		if audio.pkt.stream_index == audio.idx {
-			if r == 0 {
-				audio.orig.data = audio.pkt.data
-				audio.orig.size = audio.pkt.size
-				return nil
-			}
+		if r != 0 {
 			return avError(r, "av_read_frame")
+		}
+		if audio.pkt.stream_index == audio.idx {
+			audio.orig.data = audio.pkt.data
+			audio.orig.size = audio.pkt.size
+			return nil
 		}
 		/* skip packets belonging to other streams */
 		C.av_free_packet(&audio.pkt)
