@@ -69,7 +69,7 @@ func OpenFile(filename string) (*FormatContext, error) {
 	defer C.free(unsafe.Pointer(cfile))
 	r := C.avformat_open_input(&ctx.ctx, cfile, nil, nil)
 	if r < 0 {
-		return nil, avError(r, "avformat_open_input")
+		return nil, avError(r, "avformat_open_input: " + filename)
 	}
 	return &ctx, nil
 }
