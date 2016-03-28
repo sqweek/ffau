@@ -145,6 +145,7 @@ func (audio *AudioStream) read_frame() error {
 		audio.pkt.size = audio.orig.size
 		C.av_free_packet(&audio.pkt)
 	}
+
 	for {
 		r := C.av_read_frame(audio.ctx.ctx, &audio.pkt)
 		if r != 0 {
