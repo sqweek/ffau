@@ -11,6 +11,14 @@ import (
 #cgo pkg-config: libavformat libavcodec libavutil libswresample
 #include <libavutil/samplefmt.h>
 #include <libavformat/avformat.h>
+
+AVPacket* ffau_alloc_packet() {
+	AVPacket *pkt = malloc(sizeof(AVPacket));
+	if (pkt != NULL) {
+		av_init_packet(pkt);
+	}
+	return pkt;
+}
 */
 import "C"
 
@@ -45,7 +53,7 @@ type AudioStream struct {
 		data *C.uint8_t
 		size C.int
 	}
-	pkt       C.AVPacket
+	pkt       *C.AVPacket
 	frame     *C.AVFrame
 	framesEOF bool
 }
@@ -122,7 +130,11 @@ func (format *FormatContext) OpenAudioStream() (*AudioStream, error) {
 		return nil, errors.New("Couldn't allocate frame")
 	}
 	audio.fmt = AudioFormat{int(dec_ctx.sample_rate), SampleFmt(dec_ctx.sample_fmt), ChannelLayout(dec_ctx.channel_layout)}
-	C.av_init_packet(&audio.pkt)
+	audio.pkt = C.ffau_alloc_packet()
+	if audio.pkt == nil {
+		return nil, errors.New("Couldn't allocate packet")
+	}
+	C.av_init_packet(audio.pkt)
 	audio.pkt.data = nil
 	audio.pkt.size = 0
 	return audio, nil
@@ -143,11 +155,11 @@ func (audio *AudioStream) read_frame() error {
 		** presumably the data pointer needs to be reset before the packet is freed? */
 		audio.pkt.data = audio.orig.data
 		audio.pkt.size = audio.orig.size
-		C.av_free_packet(&audio.pkt)
+		C.av_free_packet(audio.pkt)
 	}
 
 	for {
-		r := C.av_read_frame(audio.ctx.ctx, &audio.pkt)
+		r := C.av_read_frame(audio.ctx.ctx, audio.pkt)
 		if r != 0 {
 			return avError(r, "av_read_frame")
 		}
@@ -157,13 +169,13 @@ func (audio *AudioStream) read_frame() error {
 			return nil
 		}
 		/* skip packets belonging to other streams */
-		C.av_free_packet(&audio.pkt)
+		C.av_free_packet(audio.pkt)
 	}
 }
 
 func (audio *AudioStream) decode() (bool, error) {
 	gotFrame := C.int(0)
-	n := C.avcodec_decode_audio4(audio.stream.codec, audio.frame, &gotFrame, &audio.pkt)
+	n := C.avcodec_decode_audio4(audio.stream.codec, audio.frame, &gotFrame, audio.pkt)
 	if n < 0 {
 		return false, avError(n, "avcodec_decode_audio4")
 	}
